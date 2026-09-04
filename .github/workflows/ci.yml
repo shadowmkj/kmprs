@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (Linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Just
+        uses: extractions/setup-just@v2
+
+      - name: Build & Test with AddressSanitizer
+        run: just test-asan
+
+      - name: Production Build & Test
+        run: just test

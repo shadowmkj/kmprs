@@ -17,23 +17,30 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    char *buffer = malloc(BUFFER_SIZE);
+    unsigned char *buffer = malloc(BUFFER_SIZE);
     if (!buffer) {
-        perror("Failed to allocate buffer\n");
+        perror("Failed to allocate buffer");
         fclose(input);
         return 1;
     }
 
     int64_t freq[256] = {0};
-
     ssize_t bytes_read;
 
-    while ((bytes_read = read(fileno(input), buffer, BUFFER_SIZE)) != 0) {
-        buffer[bytes_read] = '\0';
-        for (int i = 0; i < bytes_read; i++) {
+    while ((bytes_read = read(fileno(input), buffer, BUFFER_SIZE)) > 0) {
+        for (ssize_t i = 0; i < bytes_read; i++) {
             freq[buffer[i]]++;
         }
     }
 
+    if (bytes_read < 0) {
+        perror("Error reading file");
+        free(buffer);
+        fclose(input);
+        return 1;
+    }
+
+    free(buffer);
+    fclose(input);
     return 0;
 }
