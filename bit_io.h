@@ -17,9 +17,10 @@
  * (MSB first) to the destination file whenever 8 or more bits have accumulated.
  */
 typedef struct BitWriter {
-    FILE *out;            /**< Output file stream (must be open in binary mode) */
+    FILE *out; /**< Output file stream (must be open in binary mode) */
     uint64_t accumulator; /**< Temporary bit buffer */
-    uint8_t bits_in_buffer; /**< Count of unwritten bits currently in accumulator */
+    uint8_t
+        bits_in_buffer; /**< Count of unwritten bits currently in accumulator */
 } BitWriter;
 
 /**
@@ -63,9 +64,10 @@ void bit_writer_flush(BitWriter *bw);
  * providing a bit-by-bit stream (MSB to LSB) to drive prefix-tree decoding.
  */
 typedef struct BitReader {
-    FILE *in;               /**< Input file stream (must be open in binary mode) */
-    uint8_t buffer;         /**< Current 8-bit byte being consumed */
-    uint8_t bits_remaining; /**< Number of unread bits left in the current byte */
+    FILE *in;       /**< Input file stream (must be open in binary mode) */
+    uint8_t buffer; /**< Current 8-bit byte being consumed */
+    uint8_t
+        bits_remaining; /**< Number of unread bits left in the current byte */
 } BitReader;
 
 /**
