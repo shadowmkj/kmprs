@@ -1,5 +1,15 @@
 #include "helper.h"
+#include "core.h"
 #include <stdio.h>
+
+// prints the SymbolFreq
+void print_symbol_freq(const SymbolFreq *freq, size_t size) {
+    for (size_t i = 0; i < size; i++) {
+        if (freq[i].frequency > 0)
+            printf("SymbolFreq: %lu %c %llu %f\n", i, freq[i].symbol,
+                   freq[i].frequency, freq[i].probability);
+    }
+}
 
 // prints the frequencies
 void print_freq(const uint64_t freq[256]) {
