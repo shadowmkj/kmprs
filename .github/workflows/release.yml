@@ -114,10 +114,14 @@ jobs:
           sha256sum -c SHA256SUMS
 
       - name: Generate Changelog with git-cliff
-        uses: git-cliff/git-cliff-action@v4
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
         with:
           config: "cliff.toml"
-          args: "--tag ${{ steps.vars.outputs.tag }} --strip all -o release-notes.md"
+          args: "--tag ${{ steps.vars.outputs.tag }} --strip all"
+        env:
+          OUTPUT: "release-notes.md"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
