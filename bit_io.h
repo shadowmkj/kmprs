@@ -58,16 +58,26 @@ void bit_writer_write(BitWriter *bw, uint32_t code, uint8_t length);
 void bit_writer_flush(BitWriter *bw);
 
 /**
- * @brief Extracts individual bits sequentially from an 8-bit byte stream.
+ * @def BIT_READER_BUFFER_SIZE
+ * @brief Size of the block I/O buffer for BitReader (4 KiB).
+ */
+#define BIT_READER_BUFFER_SIZE 4096
+
+/**
+ * @brief High-performance buffered bit-level input stream with a 64-bit reservoir.
  *
- * Reads 1 byte at a time from the source file into an internal 8-bit buffer,
- * providing a bit-by-bit stream (MSB to LSB) to drive prefix-tree decoding.
+ * Reads 4 KiB chunks from the input file stream using fread(), refilling an
+ * internal 64-bit integer bit-reservoir. Individual bits are extracted MSB-first
+ * in constant time O(1) without per-bit function call overhead.
  */
 typedef struct BitReader {
-    FILE *in;       /**< Input file stream (must be open in binary mode) */
-    uint8_t buffer; /**< Current 8-bit byte being consumed */
-    uint8_t
-        bits_remaining; /**< Number of unread bits left in the current byte */
+    FILE *in;                                /**< Input file stream (open in "rb" mode) */
+    uint8_t buffer[BIT_READER_BUFFER_SIZE];  /**< Block I/O buffer */
+    size_t buffer_size;                      /**< Count of valid bytes currently in buffer */
+    size_t buffer_pos;                       /**< Read cursor within block buffer */
+    uint64_t bit_reservoir;                  /**< 64-bit window of upcoming bits */
+    uint8_t bits_in_reservoir;               /**< Count of unread bits in reservoir (0 to 64) */
+    int is_eof;                              /**< Flag indicating input stream reached EOF */
 } BitReader;
 
 /**
@@ -79,13 +89,28 @@ typedef struct BitReader {
 void bit_reader_init(BitReader *br, FILE *in);
 
 /**
+ * Refills the 64-bit bit reservoir from the block buffer.
+ *
+ * Internal helper function called when the bit reservoir is depleted.
+ *
+ * @param br Pointer to the initialized BitReader.
+ * @return 1 if at least one bit is available, or 0 if EOF is reached.
+ */
+int bit_reader_refill(BitReader *br);
+
+/**
  * Reads the next single bit from the stream (MSB to LSB).
  *
- * When all 8 bits of the current byte have been consumed, automatically reads
- * the next byte from the input file stream.
+ * Inlined directly into caller loops to eliminate function call overhead.
  *
  * @param br  Pointer to the initialized BitReader.
  * @return    `0` or `1` if a bit was successfully read,
  *            or `-1` if the End-Of-File (EOF) has been reached.
  */
-int bit_reader_read_bit(BitReader *br);
+static inline int bit_reader_read_bit(BitReader *br) {
+    if (br->bits_in_reservoir == 0 && !bit_reader_refill(br)) {
+        return -1;
+    }
+    br->bits_in_reservoir--;
+    return (int)((br->bit_reservoir >> br->bits_in_reservoir) & 1U);
+}

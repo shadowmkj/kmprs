@@ -5,6 +5,7 @@
 #include "shannon.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 int compress_stream(FILE *in, FILE *out) {
     if (!in || !out) {
@@ -107,14 +108,24 @@ int decompress_stream(FILE *in, FILE *out) {
         uint8_t sym = table.entries[0].symbol;
         BitReader reader;
         bit_reader_init(&reader, in);
-        for (uint64_t i = 0; i < original_size; i++) {
-            int bit = bit_reader_read_bit(&reader);
-            if (bit < 0) {
-                return SHN_ERR_TRUNCATED;
+
+        uint8_t out_buf[4096];
+        memset(out_buf, sym, sizeof(out_buf));
+
+        uint64_t remaining = original_size;
+        while (remaining > 0) {
+            size_t chunk = (remaining > sizeof(out_buf)) ? sizeof(out_buf)
+                                                         : (size_t)remaining;
+            for (size_t i = 0; i < chunk; i++) {
+                int bit = bit_reader_read_bit(&reader);
+                if (bit < 0) {
+                    return SHN_ERR_TRUNCATED;
+                }
             }
-            if (fputc((int)sym, out) == EOF) {
+            if (fwrite(out_buf, 1, chunk, out) != chunk) {
                 return SHN_ERR_IO;
             }
+            remaining -= chunk;
         }
         return SHN_OK;
     }
@@ -125,11 +136,13 @@ int decompress_stream(FILE *in, FILE *out) {
         return SHN_ERR_IO;
     }
 
-    // Sequentially extract bits from the bitstream, walking the tree from root
-    // to leaf for each symbol. Halt precisely when original_size bytes have
-    // been emitted to avoid interpreting trailing padding bits as data.
     BitReader reader;
     bit_reader_init(&reader, in);
+
+    // Extract bits via the inlined BitReader, traversing from root to leaf for
+    // each symbol. Buffer decoded symbols in chunks of 4 KiB before writing.
+    uint8_t out_buf[4096];
+    size_t out_buf_len = 0;
 
     for (uint64_t decoded = 0; decoded < original_size; decoded++) {
         const ShannonNode *curr = tree;
@@ -146,10 +159,21 @@ int decompress_stream(FILE *in, FILE *out) {
             }
         }
 
-        if (fputc((int)curr->symbol, out) == EOF) {
-            free_shannon_tree(tree);
-            return SHN_ERR_IO;
+        out_buf[out_buf_len++] = curr->symbol;
+        if (out_buf_len == sizeof(out_buf)) {
+            if (fwrite(out_buf, 1, sizeof(out_buf), out) != sizeof(out_buf)) {
+                free_shannon_tree(tree);
+                return SHN_ERR_IO;
+            }
+            out_buf_len = 0;
         }
+    }
+
+    // Flush any remaining buffered symbols to output
+    if (out_buf_len > 0 &&
+        fwrite(out_buf, 1, out_buf_len, out) != out_buf_len) {
+        free_shannon_tree(tree);
+        return SHN_ERR_IO;
     }
 
     free_shannon_tree(tree);
