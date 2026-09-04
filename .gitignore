@@ -1,3 +1,15 @@
-*.pdf
+# Build artifacts and binaries
 kmprs
-*.dSYM
+*.o
+*.dSYM/
+
+# Doxygen generated documentation
+html/
+latex/
+*.pdf
+
+# Project-local temporary files
+tmp/
+
+# OS metadata
+.DS_Store

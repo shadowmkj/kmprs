@@ -21,5 +21,9 @@ jobs:
       - name: Build & Test with AddressSanitizer
         run: just test-asan
 
+      - name: Static Analysis with clang-tidy
+        run: just tidy
+
       - name: Production Build & Test
         run: just test
+

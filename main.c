@@ -23,7 +23,11 @@ int main(int argc, char **argv) {
     size_t bytes_read;
     uint64_t total_chars = 0;
 
-    while ((bytes_read = fread(buffer, 1, BUFFER_SIZE, input)) > 0) {
+    while (!feof(input) && !ferror(input)) {
+        bytes_read = fread(buffer, 1, BUFFER_SIZE, input);
+        if (bytes_read == 0) {
+            break;
+        }
         for (size_t i = 0; i < bytes_read; i++) {
             total_chars++;
             freq[buffer[i]]++;
