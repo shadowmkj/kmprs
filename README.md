@@ -9,7 +9,15 @@
 
 ## Installation
 
-### Option 1: Pre-built Binaries (Recommended)
+### Option 1: Quick Install (curl)
+
+Run the automated installer to detect your platform, download the latest pre-compiled release, and install `kmprs`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shadowmkj/kmprs/main/install.sh | bash
+```
+
+### Option 2: Pre-built Binaries (Manual)
 
 Download the latest pre-compiled archive for your platform (Linux x86_64 or macOS Apple Silicon) from the [GitHub Releases](https://github.com/shadowmkj/kmprs/releases) page:
 
@@ -21,7 +29,7 @@ tar -xzf kmprs-v*-*.tar.gz
 sudo mv kmprs /usr/local/bin/
 ```
 
-### Option 2: Build from Source
+### Option 3: Build from Source
 
 #### Prerequisites
 - A C11-compliant compiler (`gcc` or `clang`)
