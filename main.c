@@ -1,3 +1,4 @@
+#include "bit_io.h"
 #include "core.h"
 #include "format.h"
 #include "helper.h"
@@ -53,6 +54,9 @@ int main(int argc, char **argv) {
     ShannonNode *tree = build_shannon_tree(&table);
     print_shannon_tree(tree);
 
+    Codebook codebook;
+    build_codebook(tree, &codebook);
+
     FILE *output = fopen("output.shn", "wb");
     if (!output) {
         perror("Error: failed to create output file");
@@ -62,6 +66,22 @@ int main(int argc, char **argv) {
     }
 
     write_shn_header(output, table.total_chars, &table);
+
+    fseek(input, 0, SEEK_SET);
+    BitWriter writer;
+    bit_writer_init(&writer, output);
+    uint8_t code_byte;
+    while (!feof(input) && !ferror(input)) {
+        bytes_read = fread(&code_byte, 1, 1, input);
+        if (bytes_read == 0) {
+            break;
+        }
+        ShannonCode code = codebook.codes[code_byte];
+        bit_writer_write(&writer, code.bits, code.len);
+    }
+
+    bit_writer_flush(&writer);
+
     fclose(output);
 
     free_shannon_tree(tree);
