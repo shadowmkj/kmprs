@@ -154,9 +154,9 @@ static void extract_codes_recursive(const ShannonNode *node,
         return;
     }
 
-    extract_codes_recursive(node->left, (current_code << 1) | 0, depth + 1,
+    extract_codes_recursive(node->left, (current_code << 1U) | 0U, depth + 1,
                             out_book);
-    extract_codes_recursive(node->right, (current_code << 1) | 1, depth + 1,
+    extract_codes_recursive(node->right, (current_code << 1U) | 1U, depth + 1,
                             out_book);
 }
 
