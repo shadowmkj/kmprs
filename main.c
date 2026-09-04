@@ -1,90 +1,134 @@
-#include "bit_io.h"
-#include "core.h"
+#include "codec.h"
 #include "format.h"
-#include "helper.h"
-#include "shannon.h"
-#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
-#define BUFFER_SIZE 1024
+static void print_usage(const char *prog_name) {
+    fprintf(stderr, "Usage: %s [-d] <input_file> [output_file]\n", prog_name);
+    fprintf(stderr, "Options:\n");
+    fprintf(stderr, "  -d    Decompress .shn archive\n");
+}
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        fprintf(stderr, "Error: no filename specified\n");
+        print_usage(argv[0]);
         return 1;
     }
 
-    FILE *input = fopen(argv[1], "rb");
-    if (!input) {
-        perror("Error: failed to read file");
+    bool decompress = false;
+    const char *input_path = NULL;
+    const char *output_path = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-d") == 0) {
+            decompress = true;
+        } else if (argv[i][0] == '-') {
+            fprintf(stderr, "Error: unrecognized option '%s'\n", argv[i]);
+            print_usage(argv[0]);
+            return 1;
+        } else if (!input_path) {
+            input_path = argv[i];
+        } else if (!output_path) {
+            output_path = argv[i];
+        } else {
+            fprintf(stderr, "Error: unexpected argument '%s'\n", argv[i]);
+            print_usage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (!input_path) {
+        fprintf(stderr, "Error: no input file specified\n");
+        print_usage(argv[0]);
         return 1;
     }
 
-    unsigned char buffer[BUFFER_SIZE];
-    uint64_t freq[ALPHABET_SIZE] = {0};
-    size_t bytes_read;
-    uint64_t total_chars = 0;
+    char resolved_output[1024];
+    if (!output_path) {
+        if (decompress) {
+            size_t in_len = strlen(input_path);
+            if (in_len > 4 && strcmp(input_path + in_len - 4, ".shn") == 0) {
+                size_t base_len = in_len - 4;
+                if (base_len >= sizeof(resolved_output)) {
+                    fprintf(stderr, "Error: input path too long\n");
+                    return 1;
+                }
+                memcpy(resolved_output, input_path, base_len);
+                resolved_output[base_len] = '\0';
+            } else {
+                int written = snprintf(resolved_output, sizeof(resolved_output),
+                                       "%s.orig", input_path);
+                if (written < 0 || (size_t)written >= sizeof(resolved_output)) {
+                    fprintf(stderr, "Error: output path too long\n");
+                    return 1;
+                }
+            }
+        } else {
+            int written = snprintf(resolved_output, sizeof(resolved_output),
+                                   "%s.shn", input_path);
+            if (written < 0 || (size_t)written >= sizeof(resolved_output)) {
+                fprintf(stderr, "Error: output path too long\n");
+                return 1;
+            }
+        }
+        output_path = resolved_output;
+    }
 
-    while (!feof(input) && !ferror(input)) {
-        bytes_read = fread(buffer, 1, BUFFER_SIZE, input);
-        if (bytes_read == 0) {
+    if (strcmp(input_path, output_path) == 0) {
+        fprintf(stderr, "Error: input and output paths must differ ('%s')\n",
+                input_path);
+        return 1;
+    }
+
+    FILE *in = fopen(input_path, "rb");
+    if (!in) {
+        perror("Error: failed to open input file");
+        return 1;
+    }
+
+    FILE *out = fopen(output_path, "wb");
+    if (!out) {
+        perror("Error: failed to open output file");
+        fclose(in);
+        return 1;
+    }
+
+    int status =
+        (int)decompress ? decompress_stream(in, out) : compress_stream(in, out);
+
+    fclose(in);
+    fclose(out);
+
+    if (status != SHN_OK) {
+        switch (status) {
+        case SHN_ERR_INVALID_MAGIC:
+            fprintf(stderr, "Error: '%s' is not a valid .shn archive\n",
+                    input_path);
+            break;
+        case SHN_ERR_INVALID_COUNT:
+            fprintf(stderr, "Error: invalid symbol count in '%s'\n",
+                    input_path);
+            break;
+        case SHN_ERR_TRUNCATED:
+            fprintf(stderr, "Error: unexpected end of file reading '%s'\n",
+                    input_path);
+            break;
+        case SHN_ERR_CORRUPT_STREAM:
+            fprintf(stderr, "Error: corrupted compressed bitstream in '%s'\n",
+                    input_path);
+            break;
+        case SHN_ERR_EMPTY_FILE:
+            fprintf(stderr, "Error: input file '%s' is empty\n", input_path);
+            break;
+        case SHN_ERR_IO:
+        default:
+            fprintf(stderr, "Error: I/O failure processing '%s'\n", input_path);
             break;
         }
-        for (size_t i = 0; i < bytes_read; i++) {
-            total_chars++;
-            freq[buffer[i]]++;
-        }
-    }
-
-    if (ferror(input)) {
-        perror("Error: failed to read file");
-        fclose(input);
+        remove(output_path);
         return 1;
     }
 
-    if (total_chars == 0) {
-        fprintf(stderr, "Error: the file is empty\n");
-        fclose(input);
-        return 1;
-    }
-
-    SymbolTable table;
-    build_symbol_table(freq, total_chars, &table);
-    print_symbol_freq(table.entries, table.count);
-    ShannonNode *tree = build_shannon_tree(&table);
-    print_shannon_tree(tree);
-
-    Codebook codebook;
-    build_codebook(tree, &codebook);
-
-    FILE *output = fopen("output.shn", "wb");
-    if (!output) {
-        perror("Error: failed to create output file");
-        free_shannon_tree(tree);
-        fclose(input);
-        return 1;
-    }
-
-    write_shn_header(output, table.total_chars, &table);
-
-    fseek(input, 0, SEEK_SET);
-    BitWriter writer;
-    bit_writer_init(&writer, output);
-    uint8_t code_byte;
-    while (!feof(input) && !ferror(input)) {
-        bytes_read = fread(&code_byte, 1, 1, input);
-        if (bytes_read == 0) {
-            break;
-        }
-        ShannonCode code = codebook.codes[code_byte];
-        bit_writer_write(&writer, code.bits, code.len);
-    }
-
-    bit_writer_flush(&writer);
-
-    fclose(output);
-
-    free_shannon_tree(tree);
-    fclose(input);
     return 0;
 }

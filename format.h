@@ -126,6 +126,9 @@ typedef enum {
         -3, /**< Active symbol count K is out of valid range (1..256) */
     SHN_ERR_TRUNCATED =
         -4, /**< Unexpected end of file encountered while reading header */
+    SHN_ERR_CORRUPT_STREAM =
+        -5, /**< Bitstream corrupted or inconsistent with tree */
+    SHN_ERR_EMPTY_FILE = -6, /**< Source input file is empty */
 } ShnStatus;
 
 /**

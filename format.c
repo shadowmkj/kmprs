@@ -111,3 +111,4 @@ int read_shn_header(FILE *in, uint64_t *out_original_size,
 
     return SHN_OK;
 }
+
