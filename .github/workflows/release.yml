@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        type: string
+      draft:
+        description: "Publish as draft release"
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: "Publish as pre-release"
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-binaries:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-14
+            target: aarch64-apple-darwin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Just
+        uses: extractions/setup-just@v2
+
+      - name: Determine release tag
+        id: vars
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release binary
+        run: just build-release
+
+      - name: Package archive and checksum
+        run: |
+          TAG="${{ steps.vars.outputs.tag }}"
+          ARCHIVE_NAME="kmprs-${TAG}-${{ matrix.target }}"
+          mkdir -p dist/pkg dist/out
+          cp kmprs README.md dist/pkg/
+          tar -czvf "dist/out/${ARCHIVE_NAME}.tar.gz" -C dist/pkg kmprs README.md
+          cd dist/out
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
+          else
+            shasum -a 256 "${ARCHIVE_NAME}.tar.gz" > "${ARCHIVE_NAME}.tar.gz.sha256"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: dist/out/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine release tag
+        id: vars
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+          pattern: artifacts-*
+          merge-multiple: true
+
+      - name: Consolidate SHA256SUMS
+        run: |
+          mkdir -p release-assets
+          cp downloaded-artifacts/*.tar.gz release-assets/
+          cat downloaded-artifacts/*.sha256 > release-assets/SHA256SUMS
+          cd release-assets
+          sha256sum -c SHA256SUMS
+
+      - name: Generate Changelog with git-cliff
+        uses: git-cliff/git-cliff-action@v4
+        with:
+          config: "cliff.toml"
+          args: "--tag ${{ steps.vars.outputs.tag }} --strip all -o release-notes.md"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: Release ${{ steps.vars.outputs.tag }}
+          body_path: release-notes.md
+          draft: ${{ inputs.draft || false }}
+          prerelease: ${{ inputs.prerelease || false }}
+          files: |
+            release-assets/*.tar.gz
+            release-assets/SHA256SUMS

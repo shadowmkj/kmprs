@@ -14,6 +14,9 @@ CLANG_TIDY := if path_exists("/opt/homebrew/opt/llvm/bin/clang-tidy") == "true" 
 build:
     {{CC}} {{CFLAGS}} {{SRCS}} -o kmprs
 
+build-release:
+    {{CC}} {{CFLAGS}} -O3 -DNDEBUG {{SRCS}} -o kmprs
+
 build-asan:
     {{CC}} {{CFLAGS}} -fsanitize=address,undefined -g {{SRCS}} -o kmprs
 
