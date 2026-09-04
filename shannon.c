@@ -1,68 +1,10 @@
 #include "shannon.h"
+#include "core.h"
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-
-ShannonNode *build_shannon_tree(const SymbolTable *table) {
-    if (!table || table->count == 0)
-        return NULL;
-    return build_shannon_tree_recursive(table, 0, table->count - 1);
-}
-
-ShannonNode *build_shannon_tree_recursive(const SymbolTable *table,
-                                          size_t start, size_t end) {
-    if (start > end)
-        return NULL;
-
-    ShannonNode *node = malloc(sizeof(ShannonNode));
-    if (!node)
-        return NULL;
-
-    if (start == end) {
-        node->is_leaf = 1;
-        node->symbol = table->entries[start].symbol;
-        node->frequency = table->entries[start].frequency;
-        node->probability = table->entries[start].probability;
-        node->left = NULL;
-        node->right = NULL;
-        return node;
-    }
-
-    uint64_t total = 0;
-    for (size_t i = start; i < end; i++) {
-        total += table->entries[i].frequency;
-    }
-
-    uint64_t minimum = UINT64_MAX;
-    size_t minimum_idx = start;
-    uint64_t left_sum = 0, right_sum = total;
-
-    for (size_t i = start; i < end; i++) {
-        left_sum += table->entries[i].frequency;
-        right_sum -= table->entries[i].frequency;
-        uint64_t diff = (left_sum > right_sum) ? (left_sum - right_sum)
-                                               : (right_sum - left_sum);
-        if (diff < minimum) {
-            minimum = diff;
-            minimum_idx = i;
-        } else {
-            break;
-        }
-    }
-
-    node->is_leaf = 0;
-    node->symbol = 0;
-    node->left = build_shannon_tree_recursive(table, start, minimum_idx);
-    node->right = build_shannon_tree_recursive(table, minimum_idx + 1, end);
-    node->frequency = (node->left ? node->left->frequency : 0) +
-                      (node->right ? node->right->frequency : 0);
-    node->probability = (node->left ? node->left->probability : 0) +
-                        (node->right ? node->right->probability : 0);
-    return node;
-}
 
 static void format_symbol(uint8_t sym, char *out, size_t out_len) {
     if (sym == '\n') {
@@ -81,11 +23,9 @@ static void format_symbol(uint8_t sym, char *out, size_t out_len) {
 }
 
 static void print_shannon_tree_recursive(const ShannonNode *node,
-                                        const char *prefix,
-                                        int is_left,
-                                        const char *branch_label,
-                                        char *code,
-                                        int depth) {
+                                         const char *prefix, int is_left,
+                                         const char *branch_label, char *code,
+                                         int depth) {
     if (!node)
         return;
 
@@ -95,9 +35,9 @@ static void print_shannon_tree_recursive(const ShannonNode *node,
         char sym_buf[32];
         format_symbol(node->symbol, sym_buf, sizeof(sym_buf));
         code[depth] = '\0';
-        printf("Leaf: %-12s [code: %-8s] (freq: %llu, prob: %.4f)\n",
-               sym_buf, (depth > 0) ? code : "0",
-               (unsigned long long)node->frequency, node->probability);
+        printf("Leaf: %-12s [code: %-8s] (freq: %llu, prob: %.4f)\n", sym_buf,
+               (depth > 0) ? code : "0", (unsigned long long)node->frequency,
+               node->probability);
     } else {
         printf("Internal (freq: %llu, prob: %.4f)\n",
                (unsigned long long)node->frequency, node->probability);
@@ -115,16 +55,73 @@ static void print_shannon_tree_recursive(const ShannonNode *node,
         if (node->left) {
             code[depth] = '0';
             print_shannon_tree_recursive(node->left, new_prefix,
-                                         node->right != NULL, "├── [0] ",
-                                         code, depth + 1);
+                                         node->right != NULL, "├── [0] ", code,
+                                         depth + 1);
         }
         if (node->right) {
             code[depth] = '1';
-            print_shannon_tree_recursive(node->right, new_prefix,
-                                         0, "└── [1] ",
+            print_shannon_tree_recursive(node->right, new_prefix, 0, "└── [1] ",
                                          code, depth + 1);
         }
     }
+}
+
+static ShannonNode *build_shannon_tree_recursive(const SymbolTable *table,
+                                                 size_t start, size_t end) {
+    if (start > end)
+        return NULL;
+
+    ShannonNode *node = malloc(sizeof(ShannonNode));
+    if (!node)
+        return NULL;
+
+    if (start == end) {
+        node->is_leaf = 1;
+        node->symbol = table->entries[start].symbol;
+        node->frequency = table->entries[start].frequency;
+        node->probability = table->entries[start].probability;
+        node->left = NULL;
+        node->right = NULL;
+        return node;
+    }
+
+    uint64_t total = 0;
+    for (size_t i = start; i <= end; i++) {
+        total += table->entries[i].frequency;
+    }
+
+    uint64_t minimum = UINT64_MAX;
+    size_t split = start;
+    uint64_t left_sum = 0;
+
+    for (size_t i = start; i < end; i++) {
+        left_sum += table->entries[i].frequency;
+        uint64_t right_sum = total - left_sum;
+        uint64_t diff = (left_sum > right_sum) ? (left_sum - right_sum)
+                                               : (right_sum - left_sum);
+        if (diff < minimum) {
+            minimum = diff;
+            split = i;
+        } else {
+            break;
+        }
+    }
+
+    node->is_leaf = 0;
+    node->symbol = 0;
+    node->left = build_shannon_tree_recursive(table, start, split);
+    node->right = build_shannon_tree_recursive(table, split + 1, end);
+    node->frequency = (node->left ? node->left->frequency : 0) +
+                      (node->right ? node->right->frequency : 0);
+    node->probability = (node->left ? node->left->probability : 0) +
+                        (node->right ? node->right->probability : 0);
+    return node;
+}
+
+ShannonNode *build_shannon_tree(const SymbolTable *table) {
+    if (!table || table->count == 0)
+        return NULL;
+    return build_shannon_tree_recursive(table, 0, table->count - 1);
 }
 
 void print_shannon_tree(const ShannonNode *root) {
@@ -132,7 +129,7 @@ void print_shannon_tree(const ShannonNode *root) {
         printf("(empty tree)\n");
         return;
     }
-    char code[256] = {0};
+    char code[ALPHABET_SIZE] = {0};
     print_shannon_tree_recursive(root, "", 0, "[Root] ", code, 0);
 }
 

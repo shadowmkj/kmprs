@@ -3,7 +3,6 @@
 #include "shannon.h"
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 #define BUFFER_SIZE 1024
 
@@ -20,7 +19,7 @@ int main(int argc, char **argv) {
     }
 
     unsigned char buffer[BUFFER_SIZE];
-    uint64_t freq[256] = {0};
+    uint64_t freq[ALPHABET_SIZE] = {0};
     size_t bytes_read;
     uint64_t total_chars = 0;
 
