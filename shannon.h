@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core.h"
-#include <stdint.h>
 
 typedef struct ShannonNode {
     uint64_t frequency;        // Aggregate frequency of this branch
@@ -13,7 +12,5 @@ typedef struct ShannonNode {
 } ShannonNode;
 
 ShannonNode *build_shannon_tree(const SymbolTable *table);
-ShannonNode *build_shannon_tree_recursive(const SymbolTable *table,
-                                          size_t start, size_t end);
 void print_shannon_tree(const ShannonNode *root);
 void free_shannon_tree(ShannonNode *node);
