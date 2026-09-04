@@ -1,3 +1,4 @@
+#include "helper.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +25,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    int64_t freq[256] = {0};
+    uint64_t freq[256] = {0};
     ssize_t bytes_read;
 
     while ((bytes_read = read(fileno(input), buffer, BUFFER_SIZE)) > 0) {
@@ -32,6 +33,8 @@ int main(int argc, char **argv) {
             freq[buffer[i]]++;
         }
     }
+
+    print_freq(freq);
 
     if (bytes_read < 0) {
         perror("Error reading file");
