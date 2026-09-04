@@ -1,5 +1,6 @@
 #include "core.h"
 #include "helper.h"
+#include "shannon.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,6 +46,9 @@ int main(int argc, char **argv) {
     SymbolTable table;
     build_symbol_table(freq, total_chars, &table);
     print_symbol_freq(table.entries, table.count);
+    ShannonNode *tree = build_shannon_tree(&table);
+    print_shannon_tree(tree);
+    free_shannon_tree(tree);
 
     fclose(input);
     return 0;
