@@ -1,7 +1,11 @@
 # Build artifacts and binaries
 kmprs
+test_header
+*.shn
 *.o
 *.dSYM/
+!small.data
+*.data
 
 # Doxygen generated documentation
 html/

@@ -1,4 +1,5 @@
 #include "core.h"
+#include "format.h"
 #include "helper.h"
 #include "shannon.h"
 #include <stdint.h>
@@ -51,8 +52,19 @@ int main(int argc, char **argv) {
     print_symbol_freq(table.entries, table.count);
     ShannonNode *tree = build_shannon_tree(&table);
     print_shannon_tree(tree);
-    free_shannon_tree(tree);
 
+    FILE *output = fopen("output.shn", "wb");
+    if (!output) {
+        perror("Error: failed to create output file");
+        free_shannon_tree(tree);
+        fclose(input);
+        return 1;
+    }
+
+    write_shn_header(output, table.total_chars, &table);
+    fclose(output);
+
+    free_shannon_tree(tree);
     fclose(input);
     return 0;
 }
