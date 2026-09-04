@@ -140,3 +140,29 @@ void free_shannon_tree(ShannonNode *node) {
     free_shannon_tree(node->right);
     free(node);
 }
+
+static void extract_codes_recursive(const ShannonNode *node,
+                                    uint32_t current_code, uint8_t depth,
+                                    Codebook *out_book) {
+    if (!node)
+        return;
+
+    if (node->is_leaf) {
+        out_book->codes[node->symbol].bits = current_code;
+        // NOTE: Edge case: single-symbol file receives a 1-bit code
+        out_book->codes[node->symbol].len = (depth == 0) ? 1 : depth;
+        return;
+    }
+
+    extract_codes_recursive(node->left, (current_code << 1) | 0, depth + 1,
+                            out_book);
+    extract_codes_recursive(node->right, (current_code << 1) | 1, depth + 1,
+                            out_book);
+}
+
+void build_codebook(const ShannonNode *root, Codebook *out_book) {
+    memset(out_book, 0, sizeof(Codebook));
+    if (root) {
+        extract_codes_recursive(root, 0, 0, out_book);
+    }
+}
