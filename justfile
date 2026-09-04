@@ -1,6 +1,6 @@
 CC := "gcc"
 CFLAGS := "-Wall -Wextra -Werror -pedantic -std=c11"
-SRCS := "main.c helper.c"
+SRCS := "main.c helper.c core.c"
 
 build:
     {{CC}} {{CFLAGS}} {{SRCS}} -o kmprs
