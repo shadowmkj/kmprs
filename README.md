@@ -84,6 +84,8 @@ kmprs -d compressed_archive.shn restored_document.txt
 
 ## Performance & Benchmarks
 
+### Compression Speed vs. Gzip
+
 Benchmarked against standard `gzip` on a 100 MB test payload (`dummy.data`) using [`hyperfine`](https://github.com/sharkdp/hyperfine):
 
 ![kmprs Benchmark Performance](perf-1.png)
@@ -96,6 +98,22 @@ Benchmarked against standard `gzip` on a 100 MB test payload (`dummy.data`) usin
 
 > [!TIP]
 > `kmprs` leverages an inlined two-tier block-buffered bit reservoir (4 KiB chunking) and direct array codebook lookups, eliminating per-byte syscalls, libc stream locking, and CPU branch mispredictions.
+
+### BitWriter I/O Buffering Impact
+
+Initially, `BitWriter` emitted each 8-bit byte immediately using `fputc()`. On large payloads (e.g. 100 MB files), this incurred ~100 million function calls and repeated libc stream locking operations.
+
+To eliminate this bottleneck, we introduced a two-tier buffered architecture:
+1. **64-bit Bit Accumulator**: Handles sub-byte bit packing in registers using fast bitwise shifts and masks.
+2. **4 KiB Block Buffer**: Batches full bytes into a 4,096-byte array before performing bulk `fwrite()` transfers.
+3. **Inlined Emission (`bit_writer_write`)**: Inlined directly into the compression loop in `bit_io.h` to eliminate per-symbol call overhead.
+
+![BitWriter Buffer Benchmark](perff.png)
+
+| Implementation | Mean Execution Time | User CPU Time | System Time | Impact |
+| :--- | :--- | :--- | :--- | :--- |
+| **Buffered BitWriter (4 KiB buffer + inline)** | **710.5 ms ± 18.0 ms** | **625.7 ms** | 79.6 ms | **~1.87x faster (2.0x CPU time reduction)** |
+| Unbuffered BitWriter (per-byte `fputc`) | 1.327 s ± 0.002 s | 1.249 s | 74.0 ms | Baseline |
 
 ---
 
