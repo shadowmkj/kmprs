@@ -7,30 +7,39 @@ void bit_writer_init(BitWriter *bw, FILE *out) {
         return;
     }
     bw->out = out;
+    bw->buffer_pos = 0;
     bw->accumulator = 0;
     bw->bits_in_buffer = 0;
 }
 
-void bit_writer_write(BitWriter *bw, uint32_t code, uint8_t length) {
-    bw->accumulator = (bw->accumulator << length) |
-                      (code & (uint32_t)((1ULL << length) - 1ULL));
-    bw->bits_in_buffer += length;
-
-    while (bw->bits_in_buffer >= 8) {
-        bw->bits_in_buffer -= 8;
-        uint8_t byte =
-            (uint8_t)((bw->accumulator >> bw->bits_in_buffer) & 0xFFU);
-        fputc(byte, bw->out);
+int bit_writer_flush_buffer(BitWriter *bw) {
+    if (!bw || !bw->out || bw->buffer_pos == 0) {
+        return 0;
     }
+    size_t written = fwrite(bw->buffer, 1, bw->buffer_pos, bw->out);
+    size_t expected = bw->buffer_pos;
+    bw->buffer_pos = 0;
+    return (written == expected) ? 1 : 0;
 }
 
 void bit_writer_flush(BitWriter *bw) {
+    if (!bw) {
+        return;
+    }
+
+    // If the bit accumulator contains unwritten fractional bits (< 8 bits),
+    // align them to the MSB of the final byte with trailing zero padding.
     if (bw->bits_in_buffer > 0) {
         uint8_t byte =
             (uint8_t)((bw->accumulator << (8U - bw->bits_in_buffer)) & 0xFFU);
-        fputc(byte, bw->out);
+        bw->buffer[bw->buffer_pos++] = byte;
         bw->accumulator = 0;
         bw->bits_in_buffer = 0;
+    }
+
+    // Write all accumulated bytes in the block buffer out to the file stream.
+    if (bw->buffer_pos > 0) {
+        (void)bit_writer_flush_buffer(bw);
     }
 }
 

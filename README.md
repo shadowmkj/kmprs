@@ -86,16 +86,16 @@ kmprs -d compressed_archive.shn restored_document.txt
 
 Benchmarked against standard `gzip` on a 100 MB test payload (`dummy.data`) using [`hyperfine`](https://github.com/sharkdp/hyperfine):
 
-![kmprs Benchmark Performance](perf.png)
+![kmprs Benchmark Performance](perf-1.png)
 
 | Command | Mean Execution Time | User Time | System Time | Relative Speed |
 | :--- | :--- | :--- | :--- | :--- |
-| **`kmprs dummy.data`** | **1.152 s ± 0.015 s** | **1.023 s** | 0.075 s | **2.36 ± 0.05x faster** |
-| `gzip -kf dummy.data` | 2.720 s ± 0.039 s | 2.641 s | 0.039 s | 1.00x (baseline) |
+| **`kmprs dummy.data`** | **690.1 ms ± 4.6 ms** | **620.1 ms** | 65.6 ms | **3.89 ± 0.03x faster** |
+| `gzip -kf dummy.data` | 2.684 s ± 0.007 s | 2.645 s | 34.0 ms | 1.00x (baseline) |
 
 
 > [!TIP]
-> `kmprs` leverages a two-tier block-buffered bit reservoir and direct array codebook lookups, minimizing syscall overhead and CPU branch mispredictions.
+> `kmprs` leverages an inlined two-tier block-buffered bit reservoir (4 KiB chunking) and direct array codebook lookups, eliminating per-byte syscalls, libc stream locking, and CPU branch mispredictions.
 
 ---
 

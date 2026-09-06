@@ -9,18 +9,24 @@
  */
 
 /**
- * @brief Packs variable-length binary codes into 8-bit bytes.
+ * @def BIT_WRITER_BUFFER_SIZE
+ * @brief Size of the block I/O buffer for BitWriter (4 KiB).
+ */
+#define BIT_WRITER_BUFFER_SIZE 4096
+
+/**
+ * @brief High-performance buffered bit-level output stream with a 64-bit accumulator.
  *
- * Computers read and write storage in 8-bit byte increments, but
- * Shannon/Huffman codes have variable bit lengths (e.g. 3, 5, or 11 bits). The
- * BitWriter buffers bits in a 64-bit accumulator, writing out full 8-bit bytes
- * (MSB first) to the destination file whenever 8 or more bits have accumulated.
+ * Packs variable-length binary codes into a 64-bit accumulator and buffers full
+ * 8-bit bytes (MSB first) into an internal 4 KiB memory buffer, writing in bulk
+ * to the destination file stream using fwrite() for maximum throughput.
  */
 typedef struct BitWriter {
-    FILE *out; /**< Output file stream (must be open in binary mode) */
-    uint64_t accumulator; /**< Temporary bit buffer */
-    uint8_t
-        bits_in_buffer; /**< Count of unwritten bits currently in accumulator */
+    FILE *out;                                /**< Destination file stream (open in "wb" mode) */
+    uint8_t buffer[BIT_WRITER_BUFFER_SIZE];  /**< Block I/O buffer for batch fwrite() */
+    size_t buffer_pos;                        /**< Current write cursor in the block buffer */
+    uint64_t accumulator;                     /**< 64-bit temporary bit reservoir */
+    uint8_t bits_in_buffer;                   /**< Unwritten bits count in accumulator (0 to 64) */
 } BitWriter;
 
 /**
@@ -32,19 +38,42 @@ typedef struct BitWriter {
 void bit_writer_init(BitWriter *bw, FILE *out);
 
 /**
+ * Flushes the internal block buffer to the destination file stream.
+ *
+ * @param bw Pointer to the initialized BitWriter.
+ * @return 1 on success, or 0 on I/O failure.
+ */
+int bit_writer_flush_buffer(BitWriter *bw);
+
+/**
  * Appends `length` bits of `code` into the bitstream (MSB-first).
  *
- * Automatically flushes full 8-bit bytes to the output file stream whenever
- * 8 or more bits accumulate.
+ * Inlined directly into caller loops to eliminate function call overhead.
+ * Emits full 8-bit bytes directly into the 4 KiB block buffer.
  *
  * @param bw      Pointer to the initialized BitWriter.
  * @param code    Bit pattern containing the codeword to write.
  * @param length  Number of valid bits in `code` to emit (1 to 32).
  */
-void bit_writer_write(BitWriter *bw, uint32_t code, uint8_t length);
+static inline void bit_writer_write(BitWriter *bw, uint32_t code,
+                                    uint8_t length) {
+    uint64_t mask = (length == 32U) ? 0xFFFFFFFFULL : ((1ULL << length) - 1ULL);
+    bw->accumulator = (bw->accumulator << length) | ((uint64_t)code & mask);
+    bw->bits_in_buffer += length;
+
+    while (bw->bits_in_buffer >= 8U) {
+        bw->bits_in_buffer -= 8U;
+        uint8_t byte =
+            (uint8_t)((bw->accumulator >> bw->bits_in_buffer) & 0xFFU);
+        bw->buffer[bw->buffer_pos++] = byte;
+        if (bw->buffer_pos == BIT_WRITER_BUFFER_SIZE) {
+            (void)bit_writer_flush_buffer(bw);
+        }
+    }
+}
 
 /**
- * Flushes any remaining fractional bits to the output file stream.
+ * Flushes any remaining fractional bits and the block buffer to disk.
  *
  * If the total number of bits written is not an exact multiple of 8,
  * the remaining bits are shifted to the upper bits of the final byte
@@ -64,20 +93,22 @@ void bit_writer_flush(BitWriter *bw);
 #define BIT_READER_BUFFER_SIZE 4096
 
 /**
- * @brief High-performance buffered bit-level input stream with a 64-bit reservoir.
+ * @brief High-performance buffered bit-level input stream with a 64-bit
+ * reservoir.
  *
  * Reads 4 KiB chunks from the input file stream using fread(), refilling an
- * internal 64-bit integer bit-reservoir. Individual bits are extracted MSB-first
- * in constant time O(1) without per-bit function call overhead.
+ * internal 64-bit integer bit-reservoir. Individual bits are extracted
+ * MSB-first in constant time O(1) without per-bit function call overhead.
  */
 typedef struct BitReader {
-    FILE *in;                                /**< Input file stream (open in "rb" mode) */
-    uint8_t buffer[BIT_READER_BUFFER_SIZE];  /**< Block I/O buffer */
-    size_t buffer_size;                      /**< Count of valid bytes currently in buffer */
-    size_t buffer_pos;                       /**< Read cursor within block buffer */
-    uint64_t bit_reservoir;                  /**< 64-bit window of upcoming bits */
-    uint8_t bits_in_reservoir;               /**< Count of unread bits in reservoir (0 to 64) */
-    int is_eof;                              /**< Flag indicating input stream reached EOF */
+    FILE *in; /**< Input file stream (open in "rb" mode) */
+    uint8_t buffer[BIT_READER_BUFFER_SIZE]; /**< Block I/O buffer */
+    size_t buffer_size;     /**< Count of valid bytes currently in buffer */
+    size_t buffer_pos;      /**< Read cursor within block buffer */
+    uint64_t bit_reservoir; /**< 64-bit window of upcoming bits */
+    uint8_t
+        bits_in_reservoir; /**< Count of unread bits in reservoir (0 to 64) */
+    int is_eof;            /**< Flag indicating input stream reached EOF */
 } BitReader;
 
 /**
