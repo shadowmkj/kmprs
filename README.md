@@ -115,6 +115,21 @@ To eliminate this bottleneck, we introduced a two-tier buffered architecture:
 | **Buffered BitWriter (4 KiB buffer + inline)** | **710.5 ms ± 18.0 ms** | **625.7 ms** | 79.6 ms | **~1.87x faster (2.0x CPU time reduction)** |
 | Unbuffered BitWriter (per-byte `fputc`) | 1.327 s ± 0.002 s | 1.249 s | 74.0 ms | Baseline |
 
+### Compression Ratio & Size Comparison
+
+On the 100 MB test dataset (`dummy.data`), `kmprs` achieves competitive output size due to heavily skewed character frequency distributions:
+
+| Format / Tool | Original Size | Compressed Size | Space Savings |
+| :--- | :--- | :--- | :--- |
+| **`kmprs` (Shannon-Fano)** | 104.86 MB (104,857,601 B) | **53.25 MB (53,247,590 B)** | **49.2%** |
+| `gzip` (Deflate / LZ77 + Huffman) | 104.86 MB (104,857,601 B) | 59.72 MB (59,715,619 B) | 43.0% |
+
+> [!WARNING]
+> **Dataset & Algorithmic Limitations:**
+> - **Limited File Testing**: This comparison was tested on specific test datasets and has not been exhaustively evaluated across diverse real-world file corpora (e.g. source code trees, rich prose, JSON/XML, multimedia, or binary executables).
+> - **Where Gzip Compresses Better**: `gzip` uses DEFLATE (LZ77 sliding-window dictionary matching combined with Huffman coding). On typical real-world text, source code, and structured data with repeated phrases and substrings, `gzip` will compress significantly better than `kmprs` because LZ77 replaces entire multi-byte sequences with compact back-references.
+> - **Shannon-Fano Suboptimality**: `kmprs` implements pure order-0 Shannon-Fano coding (top-down recursive splitting). Theoretically, Shannon-Fano is a greedy heuristic that does not guarantee minimal expected code length, making it mathematically suboptimal compared to Huffman coding. Additionally, tiny files (< 2 KiB) may experience container overhead due to the uncompressed symbol table header.
+
 ---
 
 ## Testing & Verification
