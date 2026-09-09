@@ -3,6 +3,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef struct TreeNode {
+    uint64_t
+        frequency; /**< Cumulative frequency of all symbols in this subtree */
+    int is_leaf;   /**< Flag indicating if node is a leaf (1) or internal (0) */
+    uint8_t symbol; /**< Byte value represented (valid only if is_leaf == 1) */
+    float probability;
+    struct TreeNode *left;  /**< Left child representing bit '0' */
+    struct TreeNode *right; /**< Right child representing bit '1' */
+} TreeNode;
+
 /**
  * @file core.h
  * @brief Core data structures and functions for byte frequency tracking.
@@ -25,6 +35,7 @@ typedef struct {
     uint64_t frequency; /**< Observed occurrence count of this symbol */
     float probability;  /**< Relative frequency (frequency / total_chars) */
     uint8_t symbol;     /**< The 8-bit byte value (0 to 255) */
+    TreeNode *tree_node;
 } SymbolFreq;
 
 /**

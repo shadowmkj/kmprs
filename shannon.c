@@ -22,7 +22,7 @@ static void format_symbol(uint8_t sym, char *out, size_t out_len) {
     }
 }
 
-static void print_shannon_tree_recursive(const ShannonNode *node,
+static void print_shannon_tree_recursive(const TreeNode *node,
                                          const char *prefix, int is_left,
                                          const char *branch_label, char *code,
                                          int depth) {
@@ -66,12 +66,12 @@ static void print_shannon_tree_recursive(const ShannonNode *node,
     }
 }
 
-static ShannonNode *build_shannon_tree_recursive(const SymbolTable *table,
-                                                 size_t start, size_t end) {
+static TreeNode *build_shannon_tree_recursive(const SymbolTable *table,
+                                              size_t start, size_t end) {
     if (start > end)
         return NULL;
 
-    ShannonNode *node = malloc(sizeof(ShannonNode));
+    TreeNode *node = malloc(sizeof(TreeNode));
     if (!node)
         return NULL;
 
@@ -118,13 +118,13 @@ static ShannonNode *build_shannon_tree_recursive(const SymbolTable *table,
     return node;
 }
 
-ShannonNode *build_shannon_tree(const SymbolTable *table) {
+TreeNode *build_shannon_tree(const SymbolTable *table) {
     if (!table || table->count == 0)
         return NULL;
     return build_shannon_tree_recursive(table, 0, table->count - 1);
 }
 
-void print_shannon_tree(const ShannonNode *root) {
+void print_shannon_tree(const TreeNode *root) {
     if (!root) {
         printf("(empty tree)\n");
         return;
@@ -133,7 +133,7 @@ void print_shannon_tree(const ShannonNode *root) {
     print_shannon_tree_recursive(root, "", 0, "[Root] ", code, 0);
 }
 
-void free_shannon_tree(ShannonNode *node) {
+void free_shannon_tree(TreeNode *node) {
     if (!node)
         return;
     free_shannon_tree(node->left);
@@ -141,9 +141,8 @@ void free_shannon_tree(ShannonNode *node) {
     free(node);
 }
 
-static void extract_codes_recursive(const ShannonNode *node,
-                                    uint32_t current_code, uint8_t depth,
-                                    Codebook *out_book) {
+static void extract_codes_recursive(const TreeNode *node, uint32_t current_code,
+                                    uint8_t depth, Codebook *out_book) {
     if (!node)
         return;
 
@@ -160,7 +159,7 @@ static void extract_codes_recursive(const ShannonNode *node,
                             out_book);
 }
 
-void build_codebook(const ShannonNode *root, Codebook *out_book) {
+void build_codebook(const TreeNode *root, Codebook *out_book) {
     memset(out_book, 0, sizeof(Codebook));
     if (root) {
         extract_codes_recursive(root, 0, 0, out_book);

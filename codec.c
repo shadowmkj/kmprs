@@ -2,6 +2,7 @@
 #include "bit_io.h"
 #include "core.h"
 #include "format.h"
+#include "huffman.h"
 #include "shannon.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -39,7 +40,10 @@ int compress_stream(FILE *in, FILE *out) {
     SymbolTable table;
     build_symbol_table(freq, total_chars, &table);
 
-    ShannonNode *tree = build_shannon_tree(&table);
+    build_heap(&table);
+    print_heap(&table);
+    TreeNode *tree = build_huffman_tree(&table);
+    print_huffman_tree(tree);
     if (!tree) {
         return SHN_ERR_IO;
     }
@@ -131,7 +135,8 @@ int decompress_stream(FILE *in, FILE *out) {
     }
 
     // Reconstruct the exact same prefix tree topology from the sorted table.
-    ShannonNode *tree = build_shannon_tree(&table);
+    TreeNode *tree = build_huffman_tree(&table);
+    print_huffman_tree(tree);
     if (!tree) {
         return SHN_ERR_IO;
     }
@@ -145,7 +150,7 @@ int decompress_stream(FILE *in, FILE *out) {
     size_t out_buf_len = 0;
 
     for (uint64_t decoded = 0; decoded < original_size; decoded++) {
-        const ShannonNode *curr = tree;
+        const TreeNode *curr = tree;
         while (!curr->is_leaf) {
             int bit = bit_reader_read_bit(&reader);
             if (bit < 0) {
