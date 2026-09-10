@@ -1,7 +1,7 @@
 CC := "gcc"
 CFLAGS := "-Wall -Wextra -Werror -pedantic -std=c11"
-SRCS := "main.c helper.c core.c shannon.c bit_io.c format.c codec.c"
-TEST_SRCS := "test_header.c core.c format.c shannon.c bit_io.c codec.c"
+SRCS := "main.c helper.c core.c shannon.c bit_io.c format.c codec.c huffman.c"
+TEST_SRCS := "test_header.c core.c format.c shannon.c bit_io.c codec.c huffman.c"
 
 CLANG_TIDY := if path_exists("/opt/homebrew/opt/llvm/bin/clang-tidy") == "true" {
     "/opt/homebrew/opt/llvm/bin/clang-tidy"
@@ -30,11 +30,11 @@ run file: build
     ./kmprs {{ file }}
 
 test: build build-tests
+    ./test_header
     @mkdir -p tmp
     ./kmprs small.data tmp/small.shn
     ./kmprs -d tmp/small.shn tmp/small.decomp
     cmp small.data tmp/small.decomp
-    ./test_header
 
 test-asan: build-asan build-tests-asan
     @mkdir -p tmp
