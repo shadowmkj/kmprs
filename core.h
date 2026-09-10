@@ -57,3 +57,43 @@ typedef struct {
  */
 void build_symbol_table(const uint64_t freq[ALPHABET_SIZE],
                         uint64_t total_chars, SymbolTable *out_table);
+
+/**
+ * @brief Binary tree node representing a Shannon-Fano code tree or subtree.
+ *
+ * Internal nodes represent binary prefix splits, while leaf nodes represent
+ * individual 8-bit symbols with their associated statistical frequency.
+ */
+typedef struct TreeNode {
+    uint64_t
+        frequency; /**< Cumulative frequency of all symbols in this subtree */
+    float probability; /**< Cumulative probability of all symbols in this
+                          subtree */
+    int is_leaf; /**< Flag indicating if node is a leaf (1) or internal (0) */
+    uint8_t symbol; /**< Byte value represented (valid only if is_leaf == 1) */
+    struct TreeNode *left;  /**< Left child representing bit '0' */
+    struct TreeNode *right; /**< Right child representing bit '1' */
+} TreeNode;
+
+/**
+ * @brief Variable-length prefix codeword for a single symbol.
+ *
+ * Encapsulates the bit pattern (up to 32 bits) and its bit length. Bits are
+ * ordered MSB to LSB.
+ */
+typedef struct ShannonCode {
+    uint32_t bits; /**< Codeword bit pattern packed from MSB to LSB */
+    uint8_t len;   /**< Bit length of the codeword (1 to 32) */
+} ShannonCode;
+
+/**
+ * @brief Complete mapping table from byte values to their variable-length
+ * codewords.
+ *
+ * Allows O(1) lookup of a symbol's codeword during compression by indexing
+ * directly with the byte value (0 to 255).
+ */
+typedef struct Codebook {
+    ShannonCode codes[ALPHABET_SIZE]; /**< Array mapping each byte value to its
+                                         ShannonCode */
+} Codebook;
