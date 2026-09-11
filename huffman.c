@@ -1,5 +1,6 @@
 #include "huffman.h"
 #include "core.h"
+#include "shannon.h"
 #include <stdlib.h>
 
 void heapify(HuffmanHeap *heap, size_t index) {
@@ -73,8 +74,16 @@ HuffmanHeap *build_heap(const SymbolTable *table) {
 
     for (size_t i = 0; i < table->count; i++) {
         TreeNode *leaf_node = malloc(sizeof(TreeNode));
+        if (!leaf_node) {
+            for (size_t j = 0; j < i; j++) {
+                free(heap->entries[j]);
+            }
+            free(heap);
+            return NULL;
+        }
         leaf_node->frequency = table->entries[i].frequency;
         leaf_node->symbol = table->entries[i].symbol;
+        leaf_node->probability = table->entries[i].probability;
         leaf_node->is_leaf = 1;
         leaf_node->left = NULL;
         leaf_node->right = NULL;
@@ -93,19 +102,39 @@ HuffmanHeap *build_heap(const SymbolTable *table) {
 }
 
 TreeNode *build_huffman_tree(const SymbolTable *symtab) {
+    if (!symtab || symtab->count == 0) {
+        return NULL;
+    }
+
     HuffmanHeap *heap = build_heap(symtab);
+    if (!heap) {
+        return NULL;
+    }
 
     while (heap->count > 1) {
         TreeNode *min_entry = heap_pop(heap);
         TreeNode *next_entry = heap_pop(heap);
 
         TreeNode *parent = malloc(sizeof(TreeNode));
+        if (!parent) {
+            free_shannon_tree(min_entry);
+            free_shannon_tree(next_entry);
+            while (heap->count > 0) {
+                free_shannon_tree(heap_pop(heap));
+            }
+            free(heap);
+            return NULL;
+        }
         parent->frequency = min_entry->frequency + next_entry->frequency;
+        parent->symbol = 0;
+        parent->probability = 0.0f;
         parent->is_leaf = 0;
         parent->left = next_entry;
         parent->right = min_entry;
         heap_push(heap, parent);
     }
 
-    return heap->entries[0];
+    TreeNode *root = (heap->count == 1) ? heap->entries[0] : NULL;
+    free(heap);
+    return root;
 }
