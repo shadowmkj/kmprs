@@ -1,9 +1,12 @@
 #include "codec.h"
 #include "core.h"
 #include "format.h"
+#include "huffman.h"
+#include "shannon.h"
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static void test_header_roundtrip(void) {
@@ -121,6 +124,120 @@ static void assert_files_equal(const char *path1, const char *path2) {
     (void)fclose(f2);
 }
 
+static void assert_min_heap_property(const HuffmanHeap *heap) {
+    assert(heap != NULL);
+    for (size_t i = 0; i < heap->count; i++) {
+        size_t left = (2 * i) + 1;
+        size_t right = (2 * i) + 2;
+        if (left < heap->count) {
+            assert(heap->entries[i]->frequency <=
+                       heap->entries[left]->frequency &&
+                   "Min-heap property violated at left child");
+        }
+        if (right < heap->count) {
+            assert(heap->entries[i]->frequency <=
+                       heap->entries[right]->frequency &&
+                   "Min-heap property violated at right child");
+        }
+    }
+}
+
+static void test_heap_creation_push_pop(void) {
+    // 1. Test build_heap from an unsorted SymbolTable
+    SymbolTable table;
+    table.count = 7;
+    uint64_t freqs[] = {50, 10, 80, 25, 5, 100, 30};
+    for (size_t i = 0; i < table.count; i++) {
+        table.entries[i].symbol = (uint8_t)('A' + i);
+        table.entries[i].frequency = freqs[i];
+        table.entries[i].probability = 0.0f;
+    }
+
+    HuffmanHeap *heap = build_heap(&table);
+    assert(heap != NULL && "build_heap returned NULL");
+    assert(heap->count == table.count && "Heap count mismatch");
+    assert_min_heap_property(heap);
+
+    // 2. Test heap_pop: elements must pop in ascending order of frequency
+    uint64_t prev_freq = 0;
+    size_t initial_count = heap->count;
+    for (size_t i = 0; i < initial_count; i++) {
+        TreeNode *min_entry = heap_pop(heap);
+        assert(min_entry->frequency >= prev_freq &&
+               "heap_pop did not return monotonically increasing frequency");
+        prev_freq = min_entry->frequency;
+        assert_min_heap_property(heap);
+        free(min_entry);
+    }
+    assert(heap->count == 0 && "Heap count should be 0 after all pops");
+
+    // 3. Test heap_push onto the empty heap
+    uint64_t push_freqs[] = {45, 12, 89, 3, 27, 60, 15, 3};
+    size_t push_count = sizeof(push_freqs) / sizeof(push_freqs[0]);
+    for (size_t i = 0; i < push_count; i++) {
+        TreeNode *node = malloc(sizeof(TreeNode));
+        assert(node != NULL);
+        node->symbol = (uint8_t)('a' + i);
+        node->frequency = push_freqs[i];
+        node->is_leaf = 1;
+        node->left = NULL;
+        node->right = NULL;
+        heap_push(heap, node);
+        assert_min_heap_property(heap);
+    }
+    assert(heap->count == push_count && "Heap count mismatch after push");
+
+    // 4. Pop all pushed elements to verify push maintained min-heap ordering
+    prev_freq = 0;
+    while (heap->count > 0) {
+        TreeNode *min_entry = heap_pop(heap);
+        assert(min_entry->frequency >= prev_freq &&
+               "heap_pop after push failed min-heap ordering");
+        prev_freq = min_entry->frequency;
+        assert_min_heap_property(heap);
+        free(min_entry);
+    }
+
+    free(heap);
+    printf("  [PASS] test_heap_creation_push_pop\n");
+}
+
+static void test_huffman_tree_construction(void) {
+    SymbolTable table;
+    table.count = 6;
+    table.total_chars = 100;
+    uint8_t symbols[] = {'a', 'b', 'c', 'd', 'e', 'f'};
+    uint64_t freqs[] = {45, 13, 12, 16, 9, 5};
+
+    for (size_t i = 0; i < table.count; i++) {
+        table.entries[i].symbol = symbols[i];
+        table.entries[i].frequency = freqs[i];
+        table.entries[i].probability = (float)freqs[i] / 100.0f;
+    }
+
+    TreeNode *root = build_huffman_tree(&table);
+    assert(root != NULL && "build_huffman_tree returned NULL");
+    assert(root->frequency == 100 && "Root frequency mismatch");
+    assert(root->is_leaf == 0 && "Root should be an internal node");
+
+    Codebook codebook;
+    build_codebook(root, &codebook);
+
+    // Verify all active symbols have valid prefix codes
+    for (size_t i = 0; i < table.count; i++) {
+        uint8_t sym = symbols[i];
+        assert(codebook.codes[sym].len > 0 && "Codeword length should be > 0");
+    }
+
+    // High-frequency symbol 'a' (45%) must have a short codeword (<= 2 bits)
+    assert(codebook.codes['a'].len <= 2 && "Symbol 'a' should have short code");
+    // Low-frequency symbol 'f' (5%) must have a longer codeword (>= 3 bits)
+    assert(codebook.codes['f'].len >= 3 && "Symbol 'f' should have longer code");
+
+    free_shannon_tree(root);
+    printf("  [PASS] test_huffman_tree_construction\n");
+}
+
 static void test_stream_roundtrip(const char *name, const uint8_t *data,
                                   size_t len) {
     const char *orig_path = "tmp/test_codec_orig.data";
@@ -165,6 +282,8 @@ int main(void) {
     test_header_roundtrip();
     test_invalid_magic();
     test_truncated_file();
+    test_heap_creation_push_pop();
+    test_huffman_tree_construction();
 
     const char *text =
         "The quick brown fox jumps over the lazy dog! 1234567890 \n\t\r";
