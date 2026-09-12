@@ -1,6 +1,7 @@
 #include "huffman.h"
 #include "core.h"
 #include "shannon.h"
+#include <assert.h>
 #include <stdlib.h>
 
 void heapify(HuffmanHeap *heap, size_t index) {
@@ -27,9 +28,9 @@ void heapify(HuffmanHeap *heap, size_t index) {
 }
 
 void heap_push(HuffmanHeap *heap, TreeNode *entry) {
-    if (!heap || heap->count >= ALPHABET_SIZE) {
-        return;
-    }
+    assert(heap != NULL && "heap must not be NULL");
+    assert(entry != NULL && "entry must not be NULL");
+    assert(heap->count < ALPHABET_SIZE && "heap is full");
 
     size_t index = heap->count;
     heap->entries[index] = entry;
